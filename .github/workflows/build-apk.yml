@@ -34,21 +34,26 @@ jobs:
           cp -rn /tmp/gen/android/. android/
           find android/app/src/main -name 'MainActivity.java' -delete
 
-      - name: Fix Gradle & Android SDK settings
+      - name: Fix Gradle and Android SDK settings (minSdk 24, compileSdk 36)
+        run: |
+          for f in android/app/build.gradle.kts android/app/build.gradle; do
+            if [ -f "$f" ]; then
+              sed -i -E 's/^([[:space:]]*)minSdk(Version)?([[:space:]]*=[[:space:]]*|[[:space:]]+).*/\1minSdk = 24/' "$f"
+              sed -i -E 's/^([[:space:]]*)compileSdk(Version)?([[:space:]]*=[[:space:]]*|[[:space:]]+).*/\1compileSdk = 36/' "$f"
+              echo "---- $f ----"
+              grep -n -E "minSdk|compileSdk|namespace" "$f"
+            fi
+          done
+
+      - name: Force compileSdk 36 for all plugins
         run: |
           mkdir -p ~/.gradle/init.d
-          cat > ~/.gradle/init.d/fix-build.gradle <<'EOF'
+          cat > ~/.gradle/init.d/force-compile-sdk.gradle <<'EOF'
           allprojects {
               afterEvaluate { project ->
                   def androidExt = project.extensions.findByName('android')
                   if (androidExt != null) {
-                      try {
-                          androidExt.compileSdkVersion 34
-                          if (androidExt.hasProperty('defaultConfig') && androidExt.defaultConfig != null) {
-                              androidExt.defaultConfig.targetSdkVersion 34
-                              androidExt.defaultConfig.minSdkVersion 21
-                          }
-                      } catch (Exception e) {}
+                      androidExt.compileSdkVersion(36)
                   }
               }
           }
@@ -61,7 +66,7 @@ jobs:
         run: dart run flutter_launcher_icons
 
       - name: Build release APK
-        run: flutter build apk --release --no-shrink
+        run: flutter build apk --release --no-shrink --stacktrace
 
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-release.apk SoloPlayer.apk
