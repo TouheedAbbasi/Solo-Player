@@ -1,8 +1,10 @@
+```yaml
 name: Build Release APK
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,26 +30,28 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Android platform files
+      - name: Verify Flutter project
         run: |
-          flutter create --platforms=android --project-name solo_player --org com.touheed /tmp/gen
-          mkdir -p android
-          cp -rn /tmp/gen/android/. android/
-          find android/app/src/main -name 'MainActivity.java' -delete
+          flutter --version
+          dart --version
 
-      - name: Force compileSdk 36 for all plugins
+          if [ ! -f pubspec.yaml ]; then
+            echo "ERROR: pubspec.yaml not found in repository root."
+            exit 1
+          fi
+
+      - name: Generate Android platform files if missing
         run: |
-          mkdir -p ~/.gradle/init.d
-          cat > ~/.gradle/init.d/force-compile-sdk.gradle <<'EOF'
-          allprojects {
-              afterEvaluate { project ->
-                  def androidExt = project.extensions.findByName('android')
-                  if (androidExt != null) {
-                      androidExt.compileSdkVersion(36)
-                  }
-              }
-          }
-          EOF
+          if [ ! -f android/gradlew ] && [ ! -f android/gradlew.bat ]; then
+            echo "Android platform files missing. Generating them..."
+            flutter create \
+              --platforms=android \
+              --project-name solo_player \
+              --org com.touheed \
+              .
+          else
+            echo "Existing Android platform files found."
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -54,22 +59,42 @@ jobs:
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
+      - name: Check Flutter project
+        run: flutter analyze
+
       - name: Build release APK
         run: flutter build apk --release --no-shrink
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk SoloPlayer.apk
+        run: |
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: APK was not created at $APK_PATH"
+            find build -type f -name "*.apk" || true
+            exit 1
+          fi
+
+          cp "$APK_PATH" SoloPlayer.apk
+          ls -lh SoloPlayer.apk
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: SoloPlayer-apk
           path: SoloPlayer.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Create GitHub Release
+        if: success() && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Solo Player v1.0.${{ github.run_number }}
-          body: "Automatic release build of Solo Player."
+          body: "Automated release build of Solo Player."
           files: SoloPlayer.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
