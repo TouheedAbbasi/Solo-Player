@@ -22,10 +22,6 @@ A lightweight, offline media player for Android built with Flutter. Play your lo
 ## Tech Stack
 Flutter, Dart, media_kit, GitHub Actions (CI/CD)
 
-## Screenshots
-![Home](screenshots/home.png)
-![Now playing](screenshots/player.png)
-
 ## Build locally
 ```bash
 git clone https://github.com/TouheedAbbasi/solo-player.git
